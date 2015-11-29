@@ -10,7 +10,7 @@ abstract class BlobItem {
 
   Map toJson() => { 'title': title };
 
-  BlobItemRow toRow();
+  BlobItemRow toRow(BlobItemHandler);
 }
 
 abstract class BlobItemRow extends StatelessComponent {

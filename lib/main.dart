@@ -7,8 +7,6 @@ import 'dart:async';
 
 part 'blob.dart';
 
-typedef void EventItemHandler(Event item);
-
 class Event extends BlobItem {
   Event({ String title }) : super(title: title);
 
@@ -19,32 +17,35 @@ class Event extends BlobItem {
     return json;
   }
 
-  Widget toRow() {
+  Widget toRow(BlobItemHandler onUpdated) {
     return new EventListItem(event: this);
   }
 }
 
 class Todo extends BlobItem {
-  Todo({ String title }) : super(title: title);
+  Todo({ String title, this.done }) : super(title: title);
+
+  bool done;
 
   @override
   Map toJson() {
     Map json = super.toJson();
+    json['done'] = done;
     json['type'] = runtimeType.toString();
     return json;
   }
 
-  Widget toRow() {
-    return new TodoListItem(todo: this);
-  }
-}
+  Todo.fromJson(Map json): done = json['done'], super.fromJson(json);
 
-class TodoItem extends StatelessComponent {
-  TodoItem({ this.title });
-  final String title;
-  Widget build(BuildContext context) {
-    return new Text('Title: $title');
+  void _onTodoToggle(Todo todo, bool done) {
+    todo.done = done;
+    // TODO(tsileo) trigger an AJAX call (a setState() ?)
   }
+
+  Widget toRow(BlobItemHandler onUpdated) {
+    return new TodoListItem(todo: this, onUpdated: onUpdated, onTodoToggle: _onTodoToggle);
+  }
+
 }
 
 class Data {
@@ -57,16 +58,37 @@ class Data {
   List<BlobItem> get items => _items;
 }
 
+typedef void TodoToggleCallback(Todo todo, bool done);
+
 class TodoListItem extends StatelessComponent {
-  TodoListItem({ Todo todo })
-    : todo = todo, super(key: new ObjectKey(todo));
+  TodoListItem({ Todo todo, TodoToggleCallback onTodoToggle, BlobItemHandler onUpdated })
+    : todo = todo, todoToggleCallback = onTodoToggle, onUpdated = onUpdated, super(key: new ObjectKey(todo));
 
   final Todo todo;
+  final TodoToggleCallback todoToggleCallback;
+  final BlobItemHandler onUpdated;
+
+  void _toggle(Todo todo, bool done) {
+    todoToggleCallback(todo, done);
+    onUpdated(todo);
+  }
+
+  Color _getColor(BuildContext context) {
+    return todo.done ? Colors.black54 : Theme.of(context).primaryColor;
+  }
+
+  TextStyle _getTextStyle(BuildContext context) {
+    if (todo.done) {
+      return DefaultTextStyle.of(context).copyWith(
+          color: Colors.black54, decoration: lineThrough);
+    }
+    return null;
+  }
 
   Widget build(BuildContext context) {
     return new ListItem(
-      // onTap: () => onCartChanged(product, !inCart),
-      center: new Text(todo.title)
+      onTap: () => _toggle(todo, !todo.done),
+      center: new Text('TODO ${todo.title}', style: _getTextStyle(context))
     );
   }
 }
@@ -86,9 +108,10 @@ class EventListItem extends StatelessComponent {
 }
 
 class HomeFragment extends StatefulComponent {
-  HomeFragment({ this.data });
+  HomeFragment({ this.data, this.onUpdated });
 
   final Data data;
+  final BlobItemHandler onUpdated;
 
   HomeFragmentState createState() => new HomeFragmentState();
 }
@@ -110,7 +133,7 @@ class HomeFragmentState extends State<HomeFragment> {
         type: MaterialListType.oneLine,
         items: config.data.items,
         itemBuilder: (BuildContext context, BlobItem item, int index) {
-          return item.toRow();
+          return item.toRow(config.onUpdated);
         }
       ),
       floatingActionButton: new FloatingActionButton(
@@ -123,10 +146,72 @@ class HomeFragmentState extends State<HomeFragment> {
   }
 }
 
+class TodoFragment extends StatefulComponent {
+  TodoFragment({ this.onCreated });
+
+  BlobItemHandler onCreated;
+
+  TodoFragmentState createState() => new TodoFragmentState();
+}
+
+class TodoFragmentState extends State<TodoFragment> {
+  String _title = "";
+
+  void _handleSave() {
+    config.onCreated(new Todo(title: _title, done: false));
+    Navigator.of(context).pop();
+  }
+
+  Widget buildToolBar() {
+    return new ToolBar(
+      left: new IconButton(
+        icon: "navigation/close",
+        onPressed: Navigator.of(context).pop),
+      center: new Text('New Todo'),
+      right: <Widget>[
+        new InkWell(
+          onTap: _handleSave,
+          child: new Text('SAVE')
+        )
+      ]
+    );
+  }
+
+  void _handleTitleChanged(String title) {
+    setState(() {
+      _title = title;
+    });
+  }
+
+  static final GlobalKey titleKey = new GlobalKey();
+
+  Widget buildBody() {
+    Todo todo = new Todo();
+    return new Block(<Widget>[
+        // new Text(meal.displayDate),
+        new Input(
+          key: titleKey,
+          placeholder: 'Task Title',
+          onChanged: _handleTitleChanged
+        )
+    ],
+      padding: const EdgeDims.all(20.0)
+    );
+  }
+
+  Widget build(BuildContext context) {
+    return new Scaffold(
+      toolBar: buildToolBar(),
+      body: buildBody()
+    );
+  }
+}
+
+
 class EventFragment extends StatefulComponent {
   EventFragment({ this.onCreated });
 
-  EventItemHandler onCreated;
+  BlobItemHandler onCreated;
 
   EventFragmentState createState() => new EventFragmentState();
 }
@@ -217,19 +302,27 @@ class AppState extends State<App> {
     // TODO(tsileo) HTTP request to load data
   }
 
-  void _handleEventCreated(Event item) {
+  void _handleEventCreated(BlobItem item) {
     setState(() {
       _data.add(item);
       // TODO(tsileo) sort (cf fitness app)
     });
   }
 
+  void _handleEventUpdated(BlobItem item) {
+    // TODO(tsileo) update and reload all the list
+    setState(() {
+      // _data.add(item);
+    });
+ }
+
   Widget build(BuildContext context) {
     return new MaterialApp(
       title: "Blobs",
       routes: {
-        '/': (RouteArguments args) => new HomeFragment(data: _data),
-        '/events/new': (RouteArguments args) => new EventFragment(onCreated: _handleEventCreated)
+        '/': (RouteArguments args) => new HomeFragment(data: _data, onUpdated: _handleEventUpdated),
+        '/events/new': (RouteArguments args) => new EventFragment(onCreated: _handleEventCreated),
+        '/todos/new': (RouteArguments args) => new TodoFragment(onCreated: _handleEventCreated)
       }
     );
   }
@@ -240,9 +333,9 @@ class AddItemDialog extends StatefulComponent {
 }
 
 class AddItemDialogState extends State<AddItemDialog> {
-  // TODO(jackson): Internationalize
   static final Map<String, String> _labels = <String, String>{
     '/events/new': 'Event',
+    '/todos/new': 'Todo',
   };
 
   String _addItemRoute = _labels.keys.first;
