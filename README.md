@@ -1,8 +1,3 @@
-# blobs
+# Blobs
 
-A minimal Flutter project.
-
-## Getting Started
-
-For help getting started with Flutter, view our online
-[documentation](http://flutter.io/).
+**Nothing to see here yet.**
