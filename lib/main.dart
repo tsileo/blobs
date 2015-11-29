@@ -2,30 +2,40 @@ library blobs;
 
 import 'package:flutter/material.dart';
 import 'date_utils.dart';
+import 'package:intl/intl.dart';
 import 'dart:async';
 
 part 'blob.dart';
 
 typedef void EventItemHandler(Event item);
 
-class Event {
-  Event({ this.title });
-
-  final String title;
-}
-
-class Todo extends BlobItem {
-  Todo({ DateTime when, this.title }) : super(when: when);
-  Todo.fromJson(Map json) : title = json['title'], super.fromJson(json);
-
-  final String title;
+class Event extends BlobItem {
+  Event({ String title }) : super(title: title);
 
   @override
   Map toJson() {
     Map json = super.toJson();
-    json['title'] = title;
     json['type'] = runtimeType.toString();
     return json;
+  }
+
+  Widget toRow() {
+    return new EventListItem(event: this);
+  }
+}
+
+class Todo extends BlobItem {
+  Todo({ String title }) : super(title: title);
+
+  @override
+  Map toJson() {
+    Map json = super.toJson();
+    json['type'] = runtimeType.toString();
+    return json;
+  }
+
+  Widget toRow() {
+    return new TodoListItem(todo: this);
   }
 }
 
@@ -38,13 +48,27 @@ class TodoItem extends StatelessComponent {
 }
 
 class Data {
-  List<Event> _items = <Event>[];
+  List<BlobItem> _items = <BlobItem>[];
 
-  void add(Event event) {
-    _items.add(event);
+  void add(BlobItem item) {
+    _items.add(item);
   }
 
-  List<Event> get items => _items;
+  List<BlobItem> get items => _items;
+}
+
+class TodoListItem extends StatelessComponent {
+  TodoListItem({ Todo todo })
+    : todo = todo, super(key: new ObjectKey(todo));
+
+  final Todo todo;
+
+  Widget build(BuildContext context) {
+    return new ListItem(
+      // onTap: () => onCartChanged(product, !inCart),
+      center: new Text(todo.title)
+    );
+  }
 }
 
 class EventListItem extends StatelessComponent {
@@ -82,11 +106,11 @@ class HomeFragmentState extends State<HomeFragment> {
       toolBar: new ToolBar(
         center: new Text("Blobs")
       ),
-      body: new MaterialList<Event>(
+      body: new MaterialList<BlobItem>(
         type: MaterialListType.oneLine,
         items: config.data.items,
-        itemBuilder: (BuildContext context, Event event, int index) {
-          return new EventListItem(event: event);
+        itemBuilder: (BuildContext context, BlobItem item, int index) {
+          return item.toRow();
         }
       ),
       floatingActionButton: new FloatingActionButton(
@@ -109,6 +133,7 @@ class EventFragment extends StatefulComponent {
 
 class EventFragmentState extends State<EventFragment> {
   String _title = "";
+  DateTime _selectedDate = new DateTime.now();
 
   void _handleSave() {
     config.onCreated(new Event(title: _title));
@@ -130,6 +155,20 @@ class EventFragmentState extends State<EventFragment> {
     );
   }
 
+  Future _handleSelectDate() async {
+    DateTime picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: new DateTime(2015, 8),
+      lastDate: new DateTime(2101)
+    );
+    if (picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
+  }
+
   void _handleTitleChanged(String title) {
     setState(() {
       _title = title;
@@ -147,7 +186,12 @@ class EventFragmentState extends State<EventFragment> {
           placeholder: 'Event Title',
           onChanged: _handleTitleChanged
         ),
-      ],
+      new Text(new DateFormat.yMMMd().format(_selectedDate)),
+      new RaisedButton(
+        onPressed: _handleSelectDate,
+        child: new Text('SELECT DATE')
+        )
+    ],
       padding: const EdgeDims.all(20.0)
     );
   }
