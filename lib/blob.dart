@@ -24,3 +24,13 @@ abstract class BlobItemRow extends StatelessComponent {
     return buildContent(context);
   }
 }
+
+class Data {
+  List<BlobItem> _items = <BlobItem>[];
+
+  void add(BlobItem item) {
+    _items.add(item);
+  }
+
+  List<BlobItem> get items => _items;
+}
